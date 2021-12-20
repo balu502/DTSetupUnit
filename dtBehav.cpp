@@ -294,6 +294,9 @@ void TDtBehav::run()
           phase=GLOBAL_ERROR_STATE;
         }
         else {
+
+          while(devName=="COMMON")msleep(2000);
+
           phase = GETINFO_STATE;
           logSrv->logMessage(tr("Initialisation of device was finished successfully."));
         }
@@ -1098,8 +1101,8 @@ bool TDtBehav::USBCy_RW(QString cmd, QString &answer, CyDev *usb, CANChannels *u
     }
     logDev->logMessage("Error! "+canDevName.at(uC->can_id)+cmd+" -> " + answer);
 
-    devsAvailable.clear();
-    emit onDeviceInfoAvailable(false);
+//--devsAvailable.clear();
+//--emit onDeviceInfoAvailable(false);
   }
   else
     logDev->logMessage(canDevName.at(uC->can_id)+cmd+" -> " + answer);
@@ -1228,24 +1231,25 @@ bool TDtBehav::writeIntoUSB512(QString cmd,QString templ,unsigned char* buf)
 //-----------------------------------------------------------------------------
 //--- Initialise device INITIAL_STATE in state machine
 //-----------------------------------------------------------------------------
-void TDtBehav::initialDevice(void)
-{
- if(FX2)
-    if(FX2->IsOpen()) FX2->Close();
-  if(Optics_uC) { delete Optics_uC; Optics_uC=0;}
-  if(Temp_uC) { delete Temp_uC; Temp_uC=0;}
-  if(Motor_uC) { delete Motor_uC; Motor_uC=0;}
-  if(Display_uC) { delete Display_uC; Display_uC=0;}
+void TDtBehav::initialDevice(void){
+
+  if(FX2 && FX2->IsOpen()) FX2->Close();
+
+  if(Optics_uC) { delete Optics_uC; Optics_uC=0; }
+  if(Temp_uC)   { delete Temp_uC;   Temp_uC =0;  }
+  if(Motor_uC)  { delete Motor_uC;  Motor_uC=0;  }
+  if(Display_uC){ delete Display_uC;Display_uC=0;}
+
   if(FX2) { delete FX2; FX2=0;}
+
   FX2 = new CyDev(hWnd);
-  if(!FX2){
+
+  if( !FX2 ){
     globalError.setProgError(TProgErrors::USB_CREATE_ERROR); // FX2 don't create
     FX2=0;
     return;
   }
 
-//----- EDITED, A.Gusev
-//  logSrv->logMessage(tr("Assign serial number from parameters string ")+devName.toUpper());
 
   int i=0;
   int num;
@@ -1254,7 +1258,6 @@ void TDtBehav::initialDevice(void)
 
   QStringList devsList;
 
-  devsAvailable.clear();
   emit onDeviceInfoAvailable(false);
 
   cHandle=-1;
@@ -1262,36 +1265,37 @@ void TDtBehav::initialDevice(void)
   do {
 
     devHandle = FX2->Open(i);
-    if(devHandle != INVALID_HANDLE_VALUE) {
+
+    if ( devHandle != INVALID_HANDLE_VALUE ) {
+
       pfx2 = new USB_Info;
       pfx2->devHandle = FX2->DeviceHandle();
-      pfx2->SerNum = QString::fromWCharArray(FX2->SerNum);
-      pfx2->PID = FX2->ProductID;
-      pfx2->VID = FX2->VendorID;
+      pfx2->SerNum  = QString::fromWCharArray(FX2->SerNum);
+      pfx2->PID     = FX2->ProductID;
+      pfx2->VID     = FX2->VendorID;
       pfx2->handle_win = NULL;
+
       num = pfx2->SerNum.mid(1,1).toInt();
-      logSrv->logMessage(tr("Found device with serial number ")+pfx2->SerNum);
+
+      logSrv->logMessage(tr("Found device with serial number %1").arg(pfx2->SerNum));
 
       if ( devsAvailable.empty() )
-          devsList << pfx2->SerNum;
-
-      devName = pfx2->SerNum;   // EDITED, A.Gusev
+          devsList << pfx2->SerNum;      
 
       if ( pfx2->SerNum.toUpper().trimmed() == devName.toUpper().trimmed() ){
 
-        emit onDeviceInfoAvailable(true);
-
-        logSrv->logMessage(tr("Assign serial number from parameters string ")+devName.toUpper());
+        logSrv->logMessage(tr("Assign serial number from parameters string %1").arg(devName.toUpper()));
 
         cHandle = i;
 
-        logSrv->logMessage(tr("Connect to devices ")+pfx2->SerNum.toUpper());
+        logSrv->logMessage(tr("Connect to devices %1").arg(pfx2->SerNum.toUpper()));
+
         switch(num) {
           case 5: pfx2->status = 96;  sectors=1; pumps=96; tubes=96;  count_block=1; logSrv->logMessage(tr("Device observe as DT96")); break;
           case 6: pfx2->status = 384; sectors=4; pumps=96; tubes=384; count_block=2; logSrv->logMessage(tr("Device observe as DT384"));break;
           case 7: pfx2->status = 48;  sectors=1; pumps=48; tubes=48;  count_block=1; logSrv->logMessage(tr("Device observe as DT48"));break;
           case 8: pfx2->status = 192; sectors=2; pumps=96; tubes=192; count_block=1; logSrv->logMessage(tr("Device observe as DT192"));break;
-          default: pfx2->status = 0;  sectors=1; pumps=96; tubes=96;  count_block=1; logSrv->logMessage(tr("UNKNOWN device")) ;cHandle=-1;break;
+          default:pfx2->status = 0;   sectors=1; pumps=96; tubes=96;  count_block=1; logSrv->logMessage(tr("UNKNOWN device")) ;cHandle=-1;break;
         }
         type_dev=tubes;
 
@@ -1301,9 +1305,11 @@ void TDtBehav::initialDevice(void)
         setProperty("pumps",        pumps);
         setProperty("tubes",        tubes);
         setProperty("count_block",  count_block);
+
+        parameters.resize(BYTES_IN_SECTOR*sectors);
       }
 
-      parameters.resize(BYTES_IN_SECTOR*sectors);
+//      parameters.resize(BYTES_IN_SECTOR*sectors);
       delete pfx2;
     }
 
@@ -1312,10 +1318,18 @@ void TDtBehav::initialDevice(void)
 
   } while( devHandle != INVALID_HANDLE_VALUE );
 
-  if ( devsAvailable.empty() ){
+
+  if ( devsAvailable.isEmpty() ){
        devsAvailable = devsList;
-       emit onDeviceListAvailable();
+
+       if ( devsAvailable.count() ){
+
+            emit onDeviceListAvailable();
+            return;
+       }
   }
+
+  qDebug() << "DevName" << devName;
 
   if((i==1)&&(cHandle<0)){ // no USB connection found
     globalError.setProgError(TProgErrors::USB_CONNECT_ERROR);
@@ -1327,11 +1341,15 @@ void TDtBehav::initialDevice(void)
     return;
   }
 
+
   FX2->Open(cHandle);
-  Optics_uC = new CANChannels(FX2,UCOPTICS_CANID);
-  Temp_uC = new CANChannels(FX2,UCTEMP_CANID);
-  Motor_uC = new CANChannels(FX2,UCMOTOR_CANID);
-  Display_uC = new CANChannels(FX2,UCDISP_CANID);
+
+  Optics_uC = new CANChannels(FX2, UCOPTICS_CANID);
+  Temp_uC   = new CANChannels(FX2, UCTEMP_CANID  );
+  Motor_uC  = new CANChannels(FX2, UCMOTOR_CANID );
+  Display_uC= new CANChannels(FX2, UCDISP_CANID  );
+
+  emit onDeviceInfoAvailable(true);
 }
 
 
@@ -1345,20 +1363,20 @@ void TDtBehav::getInfoDevice()
   buf.resize(BYTES_IN_SECTOR);
   QString text, answer;
   buf.fill(0,BYTES_IN_SECTOR);
-
+qDebug() << "INFODEV_version" << FX2 << Optics_uC;
 // 1. INFODEV_version
   if(USBCy_RW("FVER",answer,FX2,Optics_uC)) {text += answer;   }
   if(USBCy_RW("FVER",answer,FX2,Temp_uC))   {text += "\r\n" + answer;}
   if(USBCy_RW("FVER",answer,FX2,Motor_uC))  {text += "\r\n" + answer;}
   if(USBCy_RW("FVER",answer,FX2,Display_uC)){text += "\r\n" + answer;}
   map_InfoDevice.insert(INFODEV_version, text);
-
+qDebug() << "INFODEV_serName";
 // 2. INFODEV_serName
   text = QString::fromWCharArray(FX2->SerNum);
   devActualName = text;
   map_InfoDevice.insert(INFODEV_serName, text);
-  //emit onDeviceInfoAvailable(true);
-
+  emit onDeviceInfoAvailable(true);
+qDebug() << "INFODEV_devMask";
 // 3. INFODEV_devMask get present channel map in device
   int ch=0;
   ledsMap=0;
@@ -1370,7 +1388,7 @@ void TDtBehav::getInfoDevice()
     }
   }
   map_InfoDevice.insert(INFODEV_devMask, QString("0x%1").arg(ledsMap,0,16));
-
+qDebug() << "INFODEV_thermoBlock";
 // 4. INFODEV_thermoBlock get thermoblock type
   QString a1,a2,a3;
   tBlType="UNKNOWN";
@@ -1395,7 +1413,7 @@ void TDtBehav::getInfoDevice()
     }
   }
   map_InfoDevice.insert(INFODEV_thermoBlock,tBlType);
-
+qDebug() << "INFODEV_parameters";
 // 5. INFODEV_parameters Device Parameters: geometry, param of optical channels
   parameters.fill(0,BYTES_IN_SECTOR*sectors);
   active_ch=0;
@@ -1417,12 +1435,12 @@ void TDtBehav::getInfoDevice()
   }
   text = parameters.toBase64();
   map_InfoDevice.insert(INFODEV_parameters, text);
-
+qDebug() << "INFODEV_SpectralCoeff";
 // 6. INFODEV_SpectralCoeff SpectralCoeff
   readFromUSB512("CRDS 0","0",(unsigned char*)buf.data());
   text = buf.toBase64();
   map_InfoDevice.insert(INFODEV_SpectralCoeff, text);
-
+qDebug() << "INFODEV_OpticalCoeff";
 // 7. INFODEV_OpticalCoeff
   QByteArray buf_sum;
   QString cmd = "CRDS ";
@@ -1438,7 +1456,7 @@ void TDtBehav::getInfoDevice()
   tmp = buf_sum.toBase64();
   map_InfoDevice.insert(INFODEV_OpticalCoeff, tmp);
   buf_sum.clear();
-
+qDebug() << "INFODEV_UnequalCoeff";
 // 8.INFODEV_UnequalCoeff UnequalCoeff
   cmd = "CRDS ";
   j = (COUNT_CH+1)*10;

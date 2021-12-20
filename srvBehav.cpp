@@ -208,10 +208,13 @@ TServer_Dt::~TServer_Dt(){
 
 void TServer_Dt::onDeviceConnectionChanged(bool s){
 
+    qDebug() << "Device is" << (s?"open":"closed");
+
     cmbxExs->clear();
     devControllersVersion.clear();
 
     QDialogButtonBox* bb;
+    QString serD;
 
     bb = pageSpectral->commands;
     bb->button(QDialogButtonBox::Retry)->setEnabled(s);
@@ -225,18 +228,20 @@ void TServer_Dt::onDeviceConnectionChanged(bool s){
     bb->button(QDialogButtonBox::Retry)->setEnabled(s);
     bb->button(QDialogButtonBox::Apply)->setEnabled(s);
 
-    if (!s) {
+    if (!s
+    ||  (serD = device->property("serial").toString()).isEmpty() ) {
         cmbxExs->addItem( "Device disconnected" );
         return;
     }
 
-    cmbxExs->addItem( QString("%1 is online").arg(
-                    device->property("serial").toString() ) );
-    setWindowTitle( device->property("serial").toString() );
+    cmbxExs->addItem( QString("%1 is online").arg(serD) );
+    setWindowTitle( serD );
 
     foreach( QString contrInfo
-             , device->infoDevice(INFODEV_version).split("\r\n") )
+             , device->infoDevice(INFODEV_version).split("\r\n") ){
+
         setVersionController( contrInfo );
+    }
 }
 
 
@@ -246,13 +251,13 @@ void TServer_Dt::onDeviceListChanged(){
     QStringList allDevs =
                     device->availableDevices();
 
+    qDebug() << "DevList" << allDevs;
+
     if (allDevs.empty())
         return;
 
-    if (1 == allDevs.count()){
-        device->selectDevice( allDevs.first() );
-        return;
-    }
+    if (1 == allDevs.count())
+        return device->selectDevice( allDevs.first() );
 
     QString devName = QInputDialog::getItem(
                             this, this->windowTitle()

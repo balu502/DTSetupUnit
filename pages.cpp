@@ -216,14 +216,25 @@ void TPageTableInput::insertClipboardData(){
         sCells = table->selectedRanges().first();
 
     int FF = countCpFields,
-        RR = arr.count();
+        RR = arr.count(),
+        TR = sCells.topRow(),
+        LC = sCells.leftColumn(),
+        CC = sCells.columnCount();
+
+    QHeaderView *hdrH = table->horizontalHeader();
+    QHeaderView *hdrV = table->verticalHeader();
+
+    QHeaderView::ResizeMode hr = hdrH->sectionResizeMode(0);
+    QHeaderView::ResizeMode vr = hdrV->sectionResizeMode(0);
+
+    hdrH->setSectionResizeMode(QHeaderView::Fixed);
+    hdrV->setSectionResizeMode(QHeaderView::Fixed);
 
     for (r=0; r< sCells.rowCount(); r++){
-        for (c=0; c< sCells.columnCount(); c++){
-
-            table->setItem( r+ sCells.topRow(), c+ sCells.leftColumn(),
-                            new QTableWidgetItem( arr.at(r%RR).at(c%FF) ) );
-        }
+        for (c=0; c< CC; c++)
+            table->item( r+TR, c+LC )->setText( arr.at(r%RR).at(c%FF) );
     }
 
+    hdrH->setSectionResizeMode(hr);
+    hdrV->setSectionResizeMode(vr);
 }
